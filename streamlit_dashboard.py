@@ -2,11 +2,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import date
-import locale
 import plotly.express as px
-
-# Set locale for South Africa
-locale.setlocale(locale.LC_ALL, 'en_ZA.UTF-8')
 
 # Define the database file name
 DB_FILE = 'ceo_dashboard.db'
@@ -20,9 +16,9 @@ def run_query(query, params=(), fetch=False):
             return c.fetchall()
         conn.commit()
 
-# Helper function to format currency
+# Helper function to manually format currency in South African Rands
 def format_currency(value):
-    return locale.currency(value, grouping=True)
+    return f"R {value:,.2f}"
 
 # Initialize the database and create tables if they don't exist
 def initialize_db():
@@ -174,35 +170,35 @@ with tabs[3]:
         st.dataframe(finances_df)
         
         # Plotly bar chart for financial data trends
-financial_data = finances_df.melt(id_vars=["ID"], var_name="Indicator", value_name="Amount")
-finance_chart = px.bar(
-    financial_data, 
-    x='Indicator', 
-    y='Amount', 
-    labels={'Indicator': 'Financial Metric', 'Amount': 'Value (ZAR)'}, 
-    title="Financial Trends",
-    text='Amount'
-)
-st.plotly_chart(finance_chart)
+        financial_data = finances_df.melt(id_vars=["ID"], var_name="Indicator", value_name="Amount")
+        finance_chart = px.bar(
+            financial_data, 
+            x='Indicator', 
+            y='Amount', 
+            labels={'Indicator': 'Financial Metric', 'Amount': 'Value (ZAR)'}, 
+            title="Financial Trends",
+            text='Amount'
+        )
+        st.plotly_chart(finance_chart)
 
-# Leads Overview
-st.subheader("Leads Overview")
-leads = run_query("SELECT * FROM leads ORDER BY id DESC LIMIT 1", fetch=True)
-if leads:
-    leads_df = pd.DataFrame(leads, columns=["ID", "LinkedIn Leads", "Website Leads", "Briefs Not Started", "Quotes Issued", "Briefs Completed", "Invoices Issued (Leads)"])
-    st.dataframe(leads_df)
-    
-    # Prepare lead metrics for visualization
-    leads_data = leads_df.melt(id_vars=["ID"], var_name="Metric", value_name="Value")
-    
-    # Plotly bar chart for leads metrics
-    leads_chart = px.bar(
-        leads_data, 
-        x='Metric', 
-        y='Value', 
-        labels={'Metric': 'Leads Metric', 'Value': 'Count'}, 
-        title="Leads Distribution",
-        text='Value'
-    )
-    st.plotly_chart(leads_chart)
+    # Leads Overview
+    st.subheader("Leads Overview")
+    leads = run_query("SELECT * FROM leads ORDER BY id DESC LIMIT 1", fetch=True)
+    if leads:
+        leads_df = pd.DataFrame(leads, columns=["ID", "LinkedIn Leads", "Website Leads", "Briefs Not Started", "Quotes Issued", "Briefs Completed", "Invoices Issued (Leads)"])
+        st.dataframe(leads_df)
+        
+        # Prepare lead metrics for visualization
+        leads_data = leads_df.melt(id_vars=["ID"], var_name="Metric", value_name="Value")
+        
+        # Plotly bar chart for leads metrics
+        leads_chart = px.bar(
+            leads_data, 
+            x='Metric', 
+            y='Value', 
+            labels={'Metric': 'Leads Metric', 'Value': 'Count'}, 
+            title="Leads Distribution",
+            text='Value'
+        )
+        st.plotly_chart(leads_chart)
 
