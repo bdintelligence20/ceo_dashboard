@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import date
+import locale
+import plotly.express as px
+
+# Set locale for South Africa
+locale.setlocale(locale.LC_ALL, 'en_ZA.UTF-8')
 
 # Define the database file name
 DB_FILE = 'ceo_dashboard.db'
@@ -14,6 +19,10 @@ def run_query(query, params=(), fetch=False):
         if fetch:
             return c.fetchall()
         conn.commit()
+
+# Helper function to format currency
+def format_currency(value):
+    return locale.currency(value, grouping=True)
 
 # Initialize the database and create tables if they don't exist
 def initialize_db():
@@ -89,11 +98,6 @@ with tabs[0]:
     tasks = run_query("SELECT * FROM tasks", fetch=True)
     tasks_df = pd.DataFrame(tasks, columns=["ID", "Task Name", "Client Name", "Status", "Task Length", "Start Date", "End Date"])
     st.dataframe(tasks_df)
-    
-    # Visualization: Task Status Distribution
-    status_counts = tasks_df['Status'].value_counts()
-    st.subheader("Task Status Distribution")
-    st.bar_chart(status_counts)
 
 # Finances Section
 with tabs[1]:
@@ -115,18 +119,6 @@ with tabs[1]:
             (current_balance, invoices_issued_30, invoices_issued_quarter, invoices_issued_ytd, quotes_generated_30, quotes_generated_quarter, quotes_generated_ytd)
         )
         st.success("Financial data updated successfully!")
-    
-    # Display Financial Data
-    finances = run_query("SELECT * FROM finances ORDER BY id DESC LIMIT 1", fetch=True)
-    if finances:
-        finances_df = pd.DataFrame(finances, columns=["ID", "Current Balance", "Invoices Issued (30 Days)", "Invoices Issued (Quarter)", "Invoices Issued (YTD)", "Quotes Generated (30 Days)", "Quotes Generated (Quarter)", "Quotes Generated (YTD)"])
-        st.dataframe(finances_df)
-        
-        # Visualization: Financial Trends
-        st.subheader("Financial Trends")
-        finances_melted = finances_df.melt(id_vars=["ID"], var_name="Indicator", value_name="Amount")
-        finances_pivot = finances_melted.pivot(index='Indicator', columns='ID', values='Amount')
-        st.bar_chart(finances_pivot)
 
 # Leads Section
 with tabs[2]:
@@ -147,20 +139,8 @@ with tabs[2]:
             (linkedin_leads, web_leads, briefs_not_started, quotes_issued, briefs_completed, invoices_issued_leads)
         )
         st.success("Leads data updated successfully!")
-    
-    # Display Leads Data
-    leads = run_query("SELECT * FROM leads ORDER BY id DESC LIMIT 1", fetch=True)
-    if leads:
-        leads_df = pd.DataFrame(leads, columns=["ID", "LinkedIn Leads", "Website Leads", "Briefs Not Started", "Quotes Issued", "Briefs Completed", "Invoices Issued (Leads)"])
-        st.dataframe(leads_df)
-        
-        # Visualization: Leads Distribution
-        st.subheader("Leads Distribution")
-        leads_melted = leads_df.melt(id_vars=["ID"], var_name="Metric", value_name="Value")
-        leads_pivot = leads_melted.pivot(index='Metric', columns='ID', values='Value')
-        st.bar_chart(leads_pivot)
 
-# Overview Section
+# Overview Section (Improved Visualizations using Plotly)
 with tabs[3]:
     st.header("Overview")
     
@@ -170,34 +150,59 @@ with tabs[3]:
     tasks_df = pd.DataFrame(tasks, columns=["ID", "Task Name", "Client Name", "Status", "Task Length", "Start Date", "End Date"])
     st.dataframe(tasks_df)
     
-    # Visualization: Task Status Distribution
     if not tasks_df.empty:
-        status_counts = tasks_df['Status'].value_counts()
-        st.bar_chart(status_counts)
-    
+        # Plotly bar chart for task status distribution
+        status_counts = tasks_df['Status'].value_counts().reset_index()
+        status_chart = px.bar(status_counts, x='index', y='Status', labels={'index': 'Task Status', 'Status': 'Count'}, title="Task Status Distribution")
+        st.plotly_chart(status_chart)
+
     # Financial Overview
     st.subheader("Financial Overview")
     finances = run_query("SELECT * FROM finances ORDER BY id DESC LIMIT 1", fetch=True)
     if finances:
         finances_df = pd.DataFrame(finances, columns=["ID", "Current Balance", "Invoices Issued (30 Days)", "Invoices Issued (Quarter)", "Invoices Issued (YTD)", "Quotes Generated (30 Days)", "Quotes Generated (Quarter)", "Quotes Generated (YTD)"])
+        
+        # Format the currency values for display in ZAR
+        finances_df["Current Balance"] = finances_df["Current Balance"].apply(format_currency)
+        finances_df["Invoices Issued (30 Days)"] = finances_df["Invoices Issued (30 Days)"].apply(format_currency)
+        finances_df["Invoices Issued (Quarter)"] = finances_df["Invoices Issued (Quarter)"].apply(format_currency)
+        finances_df["Invoices Issued (YTD)"] = finances_df["Invoices Issued (YTD)"].apply(format_currency)
+        finances_df["Quotes Generated (30 Days)"] = finances_df["Quotes Generated (30 Days)"].apply(format_currency)
+        finances_df["Quotes Generated (Quarter)"] = finances_df["Quotes Generated (Quarter)"].apply(format_currency)
+        finances_df["Quotes Generated (YTD)"] = finances_df["Quotes Generated (YTD)"].apply(format_currency)
+
         st.dataframe(finances_df)
         
-        # Visualization: Financial Trends
-        st.subheader("Financial Trends")
-        finances_melted = finances_df.melt(id_vars=["ID"], var_name="Indicator", value_name="Amount")
-        finances_pivot = finances_melted.pivot(index='Indicator', columns='ID', values='Amount')
-        st.bar_chart(finances_pivot)
+        # Plotly bar chart for financial data trends
+financial_data = finances_df.melt(id_vars=["ID"], var_name="Indicator", value_name="Amount")
+finance_chart = px.bar(
+    financial_data, 
+    x='Indicator', 
+    y='Amount', 
+    labels={'Indicator': 'Financial Metric', 'Amount': 'Value (ZAR)'}, 
+    title="Financial Trends",
+    text='Amount'
+)
+st.plotly_chart(finance_chart)
+
+# Leads Overview
+st.subheader("Leads Overview")
+leads = run_query("SELECT * FROM leads ORDER BY id DESC LIMIT 1", fetch=True)
+if leads:
+    leads_df = pd.DataFrame(leads, columns=["ID", "LinkedIn Leads", "Website Leads", "Briefs Not Started", "Quotes Issued", "Briefs Completed", "Invoices Issued (Leads)"])
+    st.dataframe(leads_df)
     
-    # Leads Overview
-    st.subheader("Leads Overview")
-    leads = run_query("SELECT * FROM leads ORDER BY id DESC LIMIT 1", fetch=True)
-    if leads:
-        leads_df = pd.DataFrame(leads, columns=["ID", "LinkedIn Leads", "Website Leads", "Briefs Not Started", "Quotes Issued", "Briefs Completed", "Invoices Issued (Leads)"])
-        st.dataframe(leads_df)
-        
-        # Visualization: Leads Distribution
-        st.subheader("Leads Distribution")
-        leads_melted = leads_df.melt(id_vars=["ID"], var_name="Metric", value_name="Value")
-        leads_pivot = leads_melted.pivot(index='Metric', columns='ID', values='Value')
-        st.bar_chart(leads_pivot)
+    # Prepare lead metrics for visualization
+    leads_data = leads_df.melt(id_vars=["ID"], var_name="Metric", value_name="Value")
+    
+    # Plotly bar chart for leads metrics
+    leads_chart = px.bar(
+        leads_data, 
+        x='Metric', 
+        y='Value', 
+        labels={'Metric': 'Leads Metric', 'Value': 'Count'}, 
+        title="Leads Distribution",
+        text='Value'
+    )
+    st.plotly_chart(leads_chart)
 
