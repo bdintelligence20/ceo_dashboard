@@ -121,7 +121,7 @@ st.markdown(
 # Add space for logo at the top left
 st.markdown("""
 <header>
-    <img id="logo" src="/logo (1).png" alt="Logo" />
+    <h3>Logo</h3>
 </header>
 """, unsafe_allow_html=True)
 
