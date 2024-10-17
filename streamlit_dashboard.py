@@ -61,12 +61,11 @@ initialize_db()
 # Title
 st.title('CEO Dashboard for Fable Business Analytics')
 
-# Sidebar navigation
-st.sidebar.title('Navigation')
-selection = st.sidebar.radio("Go to", ["Tasks & Workload", "Finances", "Leads", "Overview"])
+# Horizontal Tab Navigation
+tabs = st.tabs(["Tasks & Workload", "Finances", "Leads", "Overview"])
 
 # Tasks & Workload Section
-if selection == "Tasks & Workload":
+with tabs[0]:
     st.header("Tasks & Workload")
     
     # Input form for tasks
@@ -97,7 +96,7 @@ if selection == "Tasks & Workload":
     st.bar_chart(status_counts)
 
 # Finances Section
-elif selection == "Finances":
+with tabs[1]:
     st.header("Finances")
 
     with st.form("Finances Form"):
@@ -130,7 +129,7 @@ elif selection == "Finances":
         st.bar_chart(finances_pivot)
 
 # Leads Section
-elif selection == "Leads":
+with tabs[2]:
     st.header("Leads")
 
     with st.form("Leads Form"):
@@ -162,7 +161,7 @@ elif selection == "Leads":
         st.bar_chart(leads_pivot)
 
 # Overview Section
-elif selection == "Overview":
+with tabs[3]:
     st.header("Overview")
     
     # Tasks Summary
@@ -201,3 +200,4 @@ elif selection == "Overview":
         leads_melted = leads_df.melt(id_vars=["ID"], var_name="Metric", value_name="Value")
         leads_pivot = leads_melted.pivot(index='Metric', columns='ID', values='Value')
         st.bar_chart(leads_pivot)
+
