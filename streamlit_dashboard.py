@@ -147,10 +147,20 @@ with tabs[3]:
     st.dataframe(tasks_df)
     
     if not tasks_df.empty:
-        # Plotly bar chart for task status distribution
+        # Count the occurrences of each task status
         status_counts = tasks_df['Status'].value_counts().reset_index()
-        status_chart = px.bar(status_counts, x='index', y='Status', labels={'index': 'Task Status', 'Status': 'Count'}, title="Task Status Distribution")
-        st.plotly_chart(status_chart)
+        status_counts.columns = ['Task Status', 'Count']  # Rename the columns for clarity
+
+    # Plotly bar chart for task status distribution
+    status_chart = px.bar(
+        status_counts,
+        x='Task Status',
+        y='Count',
+        labels={'Task Status': 'Task Status', 'Count': 'Number of Tasks'},
+        title="Task Status Distribution",
+        text='Count'
+    )
+    st.plotly_chart(status_chart)
 
     # Financial Overview
     st.subheader("Financial Overview")
