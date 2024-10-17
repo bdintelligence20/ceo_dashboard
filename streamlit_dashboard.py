@@ -63,6 +63,68 @@ def initialize_db():
 # Call the initialize_db function
 initialize_db()
 
+# Inject custom CSS for background, typography, and logo space
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: #25262b;
+        font-family: 'Montserrat', sans-serif;
+    }
+    .css-1aumxhk {
+        font-family: 'Montserrat', sans-serif;
+    }
+    .css-12ttj6m {
+        background-color: #25262b;
+    }
+    .css-qbe2hs {
+        background-color: #25262b;
+    }
+    .css-1offfwp {
+        background-color: #25262b;
+    }
+    .css-1v0mbdj {
+        background-color: #25262b;
+    }
+    .css-18ni7ap {
+        background-color: #25262b;
+    }
+    .css-1offfwp .stTabs div[data-baseweb="tab-list"] button {
+        background-color: #25262b;
+        font-family: 'Montserrat', sans-serif;
+        color: white;
+    }
+    .css-1aumxhk, .css-1v0mbdj {
+        font-family: 'Montserrat', sans-serif;
+    }
+    .stApp {
+        background-color: #25262b;
+    }
+    header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 0;
+    }
+    #logo {
+        width: 100px;
+        height: auto;
+    }
+    h1, h2, h3, h4, h5, h6, p, div, input, select, textarea {
+        color: white !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# Add space for logo at the top left
+st.markdown("""
+<header>
+    <img id="logo" src="logo (1).png" alt="Logo" />
+</header>
+""", unsafe_allow_html=True)
+
 # Title
 st.title('CEO Dashboard for Fable Business Analytics')
 
@@ -147,20 +209,20 @@ with tabs[3]:
     st.dataframe(tasks_df)
     
     if not tasks_df.empty:
-        # Count the occurrences of each task status
+        # Plotly bar chart for task status distribution
         status_counts = tasks_df['Status'].value_counts().reset_index()
         status_counts.columns = ['Task Status', 'Count']  # Rename the columns for clarity
 
-    # Plotly bar chart for task status distribution
-    status_chart = px.bar(
-        status_counts,
-        x='Task Status',
-        y='Count',
-        labels={'Task Status': 'Task Status', 'Count': 'Number of Tasks'},
-        title="Task Status Distribution",
-        text='Count'
-    )
-    st.plotly_chart(status_chart)
+        # Plotly bar chart for task status distribution
+        status_chart = px.bar(
+            status_counts,
+            x='Task Status',
+            y='Count',
+            labels={'Task Status': 'Task Status', 'Count': 'Number of Tasks'},
+            title="Task Status Distribution",
+            text='Count'
+        )
+        st.plotly_chart(status_chart)
 
     # Financial Overview
     st.subheader("Financial Overview")
