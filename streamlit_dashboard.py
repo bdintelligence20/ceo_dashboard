@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 import plotly.express as px
+import calendar
 
 # Define the database file name
 DB_FILE = 'ceo_dashboard.db'
@@ -63,157 +64,137 @@ def initialize_db():
 # Call the initialize_db function
 initialize_db()
 
-# Inject custom CSS for background, typography, and logo space
-st.markdown(
-    """
-    <style>
-    body {
-        background-color: #25262b;
-        font-family: 'Montserrat', sans-serif;
-    }
-    .css-1aumxhk {
-        font-family: 'Montserrat', sans-serif;
-    }
-    .css-12ttj6m {
-        background-color: #25262b;
-    }
-    .css-qbe2hs {
-        background-color: #25262b;
-    }
-    .css-1offfwp {
-        background-color: #25262b;
-    }
-    .css-1v0mbdj {
-        background-color: #25262b;
-    }
-    .css-18ni7ap {
-        background-color: #25262b;
-    }
-    .css-1offfwp .stTabs div[data-baseweb="tab-list"] button {
-        background-color: #25262b;
-        font-family: 'Montserrat', sans-serif;
-        color: white;
-    }
-    .css-1aumxhk, .css-1v0mbdj {
-        font-family: 'Montserrat', sans-serif;
-    }
-    .stApp {
-        background-color: #25262b;
-    }
-    header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 20px 0;
-    }
-    #logo {
-        width: 100px;
-        height: auto;
-    }
-    h1, h2, h3, h4, h5, h6, p, div, input, select, textarea {
-        color: white !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# Add space for logo at the top left
-st.markdown("""
-<header>
-    <h3>Logo</h3>
-</header>
-""", unsafe_allow_html=True)
-
-# Title
+# Add logo and title
+st.image("images/logo.png", width=100)
 st.title('CEO Dashboard for Fable Business Analytics')
 
-# Horizontal Tab Navigation
-tabs = st.tabs(["Tasks & Workload", "Finances", "Leads", "Overview"])
+# Horizontal Tab Navigation with Emojis
+tabs = st.tabs(["📋 Tasks & Workload", "💰 Finances", "📈 Leads", "🔍 Overview"])
 
-# Tasks & Workload Section
+# Tasks & Workload Section with sub-tabs for Sheet, Kanban, and Calendar views
 with tabs[0]:
-    st.header("Tasks & Workload")
-    
-    # Input form for tasks
-    with st.form("Task Form"):
-        task_name = st.text_input("Task Name")
-        client_name = st.text_input("Client Name")
-        status = st.selectbox("Status", ["Complete", "In Progress", "Not Started", "Overdue"])
-        task_length = st.number_input("Task Length (in days)", min_value=0)
-        start_date = st.date_input("Start Date", value=date.today())
-        end_date = st.date_input("End Date", value=date.today())
-        submit_task = st.form_submit_button("Submit Task")
-    
-    if submit_task:
-        run_query(
-            "INSERT INTO tasks (task_name, client_name, status, task_length, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)",
-            (task_name, client_name, status, task_length, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
-        )
-        st.success(f"Task '{task_name}' for client '{client_name}' added successfully!")
-    
-    # Display Tasks
+    st.header("📋 Tasks & Workload")
+
+    # Sub-tabs for the different views
+    view_tabs = st.tabs(["📑 Sheet View", "📊 Kanban View", "📅 Calendar View"])
+
+    # Fetch tasks and create a DataFrame
     tasks = run_query("SELECT * FROM tasks", fetch=True)
     tasks_df = pd.DataFrame(tasks, columns=["ID", "Task Name", "Client Name", "Status", "Task Length", "Start Date", "End Date"])
-    st.dataframe(tasks_df)
 
-# Finances Section
+    # Pre-programmed status options
+    status_options = ["Not Started", "In Progress", "Complete", "Overdue"]
+
+    # Sheet View: Editable table of tasks
+    with view_tabs[0]:
+        st.subheader("📑 Sheet View")
+        edited_tasks_df = st.data_editor(tasks_df, num_rows="dynamic", key="tasks_editor",
+                                         column_config={"Status": {"type": "select", "options": status_options}})
+
+        # Save changes back to the database
+        if st.button("💾 Save Changes to Tasks"):
+            for index, row in edited_tasks_df.iterrows():
+                # Calculate Task Length based on Start Date and End Date
+                task_length = (pd.to_datetime(row["End Date"]) - pd.to_datetime(row["Start Date"])).days
+                run_query(
+                    "UPDATE tasks SET task_name=?, client_name=?, status=?, task_length=?, start_date=?, end_date=? WHERE id=?",
+                    (row["Task Name"], row["Client Name"], row["Status"], task_length, row["Start Date"], row["End Date"], row["ID"])
+                )
+            st.success("✅ Task changes saved successfully!")
+
+    # Kanban View
+    with view_tabs[1]:
+        st.subheader("📊 Kanban View")
+        kanban_columns = st.columns(4)
+        kanban_board = {status: [] for status in status_options}
+        
+        for _, task in tasks_df.iterrows():
+            kanban_board[task["Status"]].append(task)
+
+        # Display tasks by status in Kanban columns
+        for idx, status in enumerate(status_options):
+            with kanban_columns[idx]:
+                st.write(f"**{status}**")
+                for task in kanban_board[status]:
+                    st.write(f"- {task['Task Name']} (Client: {task['Client Name']})")
+
+    # Calendar View with Waterfall (Gantt-style) View
+    with view_tabs[2]:
+        st.subheader("📅 Calendar View - Waterfall")
+        
+        # Filter tasks by selected month and year
+        calendar_view_df = tasks_df.copy()
+        calendar_view_df["Start Date"] = pd.to_datetime(calendar_view_df["Start Date"])
+        calendar_view_df["End Date"] = pd.to_datetime(calendar_view_df["End Date"])
+
+        month = st.selectbox("Select Month", range(1, 13), index=datetime.now().month - 1)
+        year = st.selectbox("Select Year", range(datetime.now().year, datetime.now().year + 5), index=0)
+
+        # Filter tasks that overlap with the selected month and year
+        start_of_month = datetime(year, month, 1)
+        end_of_month = datetime(year, month, calendar.monthrange(year, month)[1])
+        filtered_tasks = calendar_view_df[
+            (calendar_view_df["Start Date"] <= end_of_month) & (calendar_view_df["End Date"] >= start_of_month)
+        ]
+
+        if not filtered_tasks.empty:
+            # Plot the waterfall calendar view
+            fig = px.timeline(
+                filtered_tasks,
+                x_start="Start Date",
+                x_end="End Date",
+                y="Task Name",
+                color="Status",
+                title=f"Tasks for {calendar.month_name[month]} {year}",
+                labels={"Start Date": "Start Date", "End Date": "End Date"}
+            )
+            fig.update_yaxes(categoryorder="total ascending")
+            fig.update_layout(xaxis_title="Date", yaxis_title="Tasks")
+            st.plotly_chart(fig)
+        else:
+            st.write("No tasks scheduled for this month.")
+
+# Finances Section with editable table
 with tabs[1]:
-    st.header("Finances")
+    st.header("💰 Finances")
+    finances = run_query("SELECT * FROM finances", fetch=True)
+    finances_df = pd.DataFrame(finances, columns=["ID", "Current Balance", "Invoices Issued (30 Days)", "Invoices Issued (Quarter)", "Invoices Issued (YTD)", "Quotes Generated (30 Days)", "Quotes Generated (Quarter)", "Quotes Generated (YTD)"])
+    edited_finances_df = st.data_editor(finances_df, num_rows="dynamic", key="finances_editor")
 
-    with st.form("Finances Form"):
-        current_balance = st.number_input("Current Balance", min_value=0.0, format="%.2f")
-        invoices_issued_30 = st.number_input("Invoices Issued (Last 30 Days)", min_value=0.0, format="%.2f")
-        invoices_issued_quarter = st.number_input("Invoices Issued (Quarter)", min_value=0.0, format="%.2f")
-        invoices_issued_ytd = st.number_input("Invoices Issued (YTD)", min_value=0.0, format="%.2f")
-        quotes_generated_30 = st.number_input("Quotes Generated (Last 30 Days)", min_value=0.0, format="%.2f")
-        quotes_generated_quarter = st.number_input("Quotes Generated (Quarter)", min_value=0.0, format="%.2f")
-        quotes_generated_ytd = st.number_input("Quotes Generated (YTD)", min_value=0.0, format="%.2f")
-        submit_finances = st.form_submit_button("Submit Finances")
-    
-    if submit_finances:
-        run_query(
-            "INSERT INTO finances (current_balance, invoices_issued_30, invoices_issued_quarter, invoices_issued_ytd, quotes_generated_30, quotes_generated_quarter, quotes_generated_ytd) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (current_balance, invoices_issued_30, invoices_issued_quarter, invoices_issued_ytd, quotes_generated_30, quotes_generated_quarter, quotes_generated_ytd)
-        )
-        st.success("Financial data updated successfully!")
+    if st.button("💾 Save Changes to Finances"):
+        for index, row in edited_finances_df.iterrows():
+            run_query(
+                "UPDATE finances SET current_balance=?, invoices_issued_30=?, invoices_issued_quarter=?, invoices_issued_ytd=?, quotes_generated_30=?, quotes_generated_quarter=?, quotes_generated_ytd=? WHERE id=?",
+                (row["Current Balance"], row["Invoices Issued (30 Days)"], row["Invoices Issued (Quarter)"], row["Invoices Issued (YTD)"], row["Quotes Generated (30 Days)"], row["Quotes Generated (Quarter)"], row["Quotes Generated (YTD)"], row["ID"])
+            )
+        st.success("✅ Finance changes saved successfully!")
 
-# Leads Section
+# Leads Section with editable table
 with tabs[2]:
-    st.header("Leads")
+    st.header("📈 Leads")
+    leads = run_query("SELECT * FROM leads", fetch=True)
+    leads_df = pd.DataFrame(leads, columns=["ID", "LinkedIn Leads", "Website Leads", "Briefs Not Started", "Quotes Issued", "Briefs Completed", "Invoices Issued (Leads)"])
+    edited_leads_df = st.data_editor(leads_df, num_rows="dynamic", key="leads_editor")
 
-    with st.form("Leads Form"):
-        linkedin_leads = st.number_input("LinkedIn Leads", min_value=0)
-        web_leads = st.number_input("Website Leads", min_value=0)
-        briefs_not_started = st.number_input("Briefs Not Started", min_value=0)
-        quotes_issued = st.number_input("Quotes Issued", min_value=0)
-        briefs_completed = st.number_input("Briefs Completed", min_value=0)
-        invoices_issued_leads = st.number_input("Invoices Issued (Leads)", min_value=0.0, format="%.2f")
-        submit_leads = st.form_submit_button("Submit Leads")
-    
-    if submit_leads:
-        run_query(
-            "INSERT INTO leads (linkedin_leads, web_leads, briefs_not_started, quotes_issued, briefs_completed, invoices_issued_leads) VALUES (?, ?, ?, ?, ?, ?)",
-            (linkedin_leads, web_leads, briefs_not_started, quotes_issued, briefs_completed, invoices_issued_leads)
-        )
-        st.success("Leads data updated successfully!")
+    if st.button("💾 Save Changes to Leads"):
+        for index, row in edited_leads_df.iterrows():
+            run_query(
+                "UPDATE leads SET linkedin_leads=?, web_leads=?, briefs_not_started=?, quotes_issued=?, briefs_completed=?, invoices_issued_leads=? WHERE id=?",
+                (row["LinkedIn Leads"], row["Website Leads"], row["Briefs Not Started"], row["Quotes Issued"], row["Briefs Completed"], row["Invoices Issued (Leads)"], row["ID"])
+            )
+        st.success("✅ Lead changes saved successfully!")
 
-# Overview Section (Improved Visualizations using Plotly)
+# Overview Section with visualizations
 with tabs[3]:
-    st.header("Overview")
-    
-    # Tasks Summary
+    st.header("🔍 Overview")
+
+    # Task Status Visualization
     st.subheader("Tasks Overview")
     tasks = run_query("SELECT * FROM tasks", fetch=True)
     tasks_df = pd.DataFrame(tasks, columns=["ID", "Task Name", "Client Name", "Status", "Task Length", "Start Date", "End Date"])
-    st.dataframe(tasks_df)
-    
     if not tasks_df.empty:
-        # Plotly bar chart for task status distribution
         status_counts = tasks_df['Status'].value_counts().reset_index()
-        status_counts.columns = ['Task Status', 'Count']  # Rename the columns for clarity
-
-        # Plotly bar chart for task status distribution
+        status_counts.columns = ['Task Status', 'Count']
         status_chart = px.bar(
             status_counts,
             x='Task Status',
@@ -224,24 +205,11 @@ with tabs[3]:
         )
         st.plotly_chart(status_chart)
 
-    # Financial Overview
+    # Financial Data Visualization
     st.subheader("Financial Overview")
     finances = run_query("SELECT * FROM finances ORDER BY id DESC LIMIT 1", fetch=True)
     if finances:
         finances_df = pd.DataFrame(finances, columns=["ID", "Current Balance", "Invoices Issued (30 Days)", "Invoices Issued (Quarter)", "Invoices Issued (YTD)", "Quotes Generated (30 Days)", "Quotes Generated (Quarter)", "Quotes Generated (YTD)"])
-        
-        # Format the currency values for display in ZAR
-        finances_df["Current Balance"] = finances_df["Current Balance"].apply(format_currency)
-        finances_df["Invoices Issued (30 Days)"] = finances_df["Invoices Issued (30 Days)"].apply(format_currency)
-        finances_df["Invoices Issued (Quarter)"] = finances_df["Invoices Issued (Quarter)"].apply(format_currency)
-        finances_df["Invoices Issued (YTD)"] = finances_df["Invoices Issued (YTD)"].apply(format_currency)
-        finances_df["Quotes Generated (30 Days)"] = finances_df["Quotes Generated (30 Days)"].apply(format_currency)
-        finances_df["Quotes Generated (Quarter)"] = finances_df["Quotes Generated (Quarter)"].apply(format_currency)
-        finances_df["Quotes Generated (YTD)"] = finances_df["Quotes Generated (YTD)"].apply(format_currency)
-
-        st.dataframe(finances_df)
-        
-        # Plotly bar chart for financial data trends
         financial_data = finances_df.melt(id_vars=["ID"], var_name="Indicator", value_name="Amount")
         finance_chart = px.bar(
             financial_data, 
@@ -253,17 +221,12 @@ with tabs[3]:
         )
         st.plotly_chart(finance_chart)
 
-    # Leads Overview
+    # Leads Metrics Visualization
     st.subheader("Leads Overview")
     leads = run_query("SELECT * FROM leads ORDER BY id DESC LIMIT 1", fetch=True)
     if leads:
         leads_df = pd.DataFrame(leads, columns=["ID", "LinkedIn Leads", "Website Leads", "Briefs Not Started", "Quotes Issued", "Briefs Completed", "Invoices Issued (Leads)"])
-        st.dataframe(leads_df)
-        
-        # Prepare lead metrics for visualization
         leads_data = leads_df.melt(id_vars=["ID"], var_name="Metric", value_name="Value")
-        
-        # Plotly bar chart for leads metrics
         leads_chart = px.bar(
             leads_data, 
             x='Metric', 
@@ -273,4 +236,3 @@ with tabs[3]:
             text='Value'
         )
         st.plotly_chart(leads_chart)
-
